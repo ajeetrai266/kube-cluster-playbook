@@ -9,6 +9,9 @@ put both Key of your AWS account in the files name `(aws_key.yml)`, and Include 
 This Playbook first Create Secret Key for EC2 Instance to access the Instance, `So first Run this command on your localhost system`
 - ssh-keygen -m PEM
 - chmod 400 /root/.ssh/id_rsa.pub\
-     after, this run playbook
+     after this, run playbook
+     
+This Playbook, Launch 3 Instance's, 1 for Master node and 2 Instance's for Worker node/
+After Launching, start to SetUp Cluster over those Instance's
   
 
