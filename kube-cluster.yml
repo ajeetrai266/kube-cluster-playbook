@@ -1,0 +1,244 @@
+---
+ - name: "PlayBook for Launch 3 Instance"
+   hosts: localhost
+   vars_files:
+           - aws_key.yml
+   tasks:
+  
+   - name: "Create a Custom Key_Pair for EC2"
+     ec2_key:
+           aws_access_key: "{{ access_key }}"
+           aws_secret_key: "{{ secret_key }}"
+           key_material: "{{ lookup('file', '/root/.ssh/id_rsa.pub') }}"
+           state: present
+           name: "key-1"
+
+
+   - name: "Provisioning 1 Instance for Master Node"
+     ec2_instance:
+           aws_access_key: "{{ access_key }}"
+           aws_secret_key: "{{ secret_key }}"
+           region: ap-south-1
+           image_id: ami-08f63db601b82ff5f
+           instance_type: t2.micro
+           state: present
+           name: "Kube-Master"
+           vpc_subnet_id: subnet-a92920c1
+           key_name: "key-1"
+     register: x1
+
+   - name: "Provisioning 1st Instance for Worker Node"
+     ec2_instance:
+           aws_access_key: "{{ access_key }}"
+           aws_secret_key: "{{ secret_key }}"
+           region: ap-south-1
+           image_id: ami-08f63db601b82ff5f
+           instance_type: t2.micro
+           state: present
+           name: "Kube-Worker-1"
+           vpc_subnet_id: subnet-a92920c1
+           key_name: "key-1"
+     register: x2
+
+   - name: "Provisioning 2nd other Instance for Worker Node"
+     ec2_instance:
+           aws_access_key: "{{ access_key }}"
+           aws_secret_key: "{{ secret_key }}"
+           region: ap-south-1
+           image_id: ami-08f63db601b82ff5f
+           instance_type: t2.micro
+           state: present
+           name: "Kube-Worker-2"
+           vpc_subnet_id: subnet-a92920c1
+           key_name: "key-1"
+     register: x3
+
+   - name: "Add all those Instance's IP Address in Inventory"
+     blockinfile:
+           path: "/root/inven_ansible"
+           block: |
+                   [Kube_Master_node]
+                   {{ x1.instances[0].network_interfaces[0].association['public_ip'] }} ansible_user=ec2-user ansible_ssh_private_key_file=/root/.ssh/id_rsa.pub ansible_connection=ssh
+                   [Kube_Worker_node]
+                   {{ x2.instances[0].network_interfaces[0].association['public_ip'] }} ansible_user=ec2-user ansible_ssh_private_key_file=/root/.ssh/id_rsa.pub ansible_connection=ssh
+                   {{ x3.instances[0].network_interfaces[0].association['public_ip'] }} ansible_user=ec2-user ansible_ssh_private_key_file=/root/.ssh/id_rsa.pub ansible_connection=ssh
+  
+
+   - meta: refresh_inventory
+
+
+
+
+ - name: "PlayBook to configure Docker over those Instances and Configure K8s-Master, K8s-Worker Nodes"
+   hosts: Kube_Master_node, Kube_Worker_node
+
+   tasks:
+   - name: "Install Docker"
+     yum:
+             name: "docker"
+
+   - name: "Start the Docker Service"
+     service:
+             name: docker
+             state: started
+             enabled: yes
+
+   - name: "Create a Repository for Kubernetes"
+     yum_repository:
+             name: "kubernetes"
+             baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-\$basearch
+             gpgcheck: 1
+             enabled: 1
+             gpgkey:
+                         - "https://packages.cloud.google.com/yum/doc/yum-key.gpg"
+                         - "https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg"
+             exclude:
+                         - "kubelet"
+                         - "kubeadm"
+                         - "kubectl"
+             description: "kubernetes"
+
+   - name: "Install Kubeadm, Kubectl, Kubelet Command in all Nodes"
+     yum:
+             name:
+                     - kubeadm
+                     - kubectl
+                     - kubelet
+             disable_excludes: kubernetes
+     register: y
+
+   - name: "Start the Kubelet Service"
+     service:
+             name: kubelet
+             state: started
+             enabled: yes
+
+
+
+
+ - name: "In Master node"
+   hosts: Kube_Master_node
+   gather_facts: no
+
+   tasks:
+
+   - name: "Configure All Images that is required to set-Up Cluster"
+     command: "kubeadm config images pull"
+     when: y.changed == true
+
+   - name: "Change the Driver of Docker"
+     copy:
+             dest: "/etc/docker/daemon.json"
+             content: |
+                     {
+                      "exec-opts": ["native.cgroupdriver=systemd"]
+                     }
+     register: y1
+
+   - name: "Restart the Docker Service"
+     service:
+             name: docker
+             state: restarted
+     when: y1.changed == true
+
+   - name: "Install Networking Traffic Controller"
+     yum:
+             name: iproute-tc
+
+   - name: "Set Ip6tables"
+     copy:
+             dest: "/etc/sysctl.d/k8s.conf"
+             content: |
+                     net.bridge.bridge-nf-call-ip6tables = 1
+                     net.bridge.bridge-nf-call-iptables = 1
+     register: y2
+
+   - name: "Run Systctl system"
+     command: "sysctl --system"
+     when: y2.changed == true
+
+   - name: "Set the Range of Pod Network"
+     command: " kubeadm init --pod-network-cidr=10.244.0.0/16 --ignore-preflight-errors=NumCPU
+--ignore-preflight-errors=Mem"
+     when: y1.changed == true
+
+   - name: "Create Diretory for Kube Config"
+     file:
+            path: "$HOME/.kube"
+            state: directory
+     register: user
+
+   - name: "Copy K8s admin config file in Kube directory"
+     copy:
+            remote_src: yes
+            src: "/etc/kubernetes/admin.conf"
+            dest: "$HOME/.kube/config"
+            owner: "{{ user.owner }}"
+            group: "{{ user.group }}"
+
+   - name: "Create Token"
+     command: "kubeadm token create --print-join-command"
+     register: token
+     when: y.changed == true
+
+   - name: "Register Dummy Host with variable"
+     add_host:
+             name: "Dummy_Host"
+             new_token: "{{ token.stdout }}"
+     when: token.changed == true
+
+   - name: "Setup the Flannel (Overlay Network) b/w them"
+     command: "kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml"
+     when: user.changed == true
+
+
+
+ - name: "In Worker Node"
+   hosts: Kube_Worker_node
+   gather_facts: no
+  
+   tasks:
+
+   - name: "Configure All Images that is required to set-Up Cluster"
+     command: "kubeadm config images pull"
+     when: y.changed == true
+
+   - name: "Change the Driver of Docker"
+     copy:
+             dest: "/etc/docker/daemon.json"
+             content: |
+                     {
+                      "exec-opts": ["native.cgroupdriver=systemd"]
+                     }
+     register: w1
+
+   - name: "Restart the Docker Service"
+     service:
+             name: docker
+             state: restarted
+     when: w1.changed == true
+
+   - name: "Install Networking Traffic Controller"
+     yum:
+             name: iproute-tc
+
+   - name: "Set Ip6tables"
+     copy:
+             dest: "/etc/sysctl.d/k8s.conf"
+             content: |
+                     net.bridge.bridge-nf-call-ip6tables = 1
+                     net.bridge.bridge-nf-call-iptables = 1
+     register: w2
+
+   - name: "Run Systctl system"
+     command: "sysctl --system"
+     when: w2.changed == true
+
+
+   - name: "Join the worker with Master"
+     command: "{{ hostvars.Dummy_Host.new_token }}"
+     when: w1.changed == true
+
+
+...
+
