@@ -14,4 +14,6 @@ This Playbook first Create Secret Key for EC2 Instance to access the Instance, `
 This Playbook, Launch 3 Instance's, 1 for Master node and 2 Instance's for Worker node/
 After Launching, start to SetUp Cluster over those Instance's
   
-
+For do easily, `Use Ansible Collection`\
+###### Collection / Role :
+**ansible-galaxy collection install ajeetrai266.kubecluster**
