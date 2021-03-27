@@ -9,7 +9,7 @@
      ec2_key:
            aws_access_key: "{{ access_key }}"
            aws_secret_key: "{{ secret_key }}"
-           key_material: "{{ lookup('file', '/root/.ssh/id_rsa.pub') }}"
+           key_material: "{{ lookup('file', '/root/.ssh/id_rsa') }}"
            state: present
            name: "key-1"
 
@@ -58,10 +58,10 @@
            path: "/root/inven_ansible"
            block: |
                    [Kube_Master_node]
-                   {{ x1.instances[0].network_interfaces[0].association['public_ip'] }} ansible_user=ec2-user ansible_ssh_private_key_file=/root/.ssh/id_rsa.pub ansible_connection=ssh
+                   {{ x1.instances[0].network_interfaces[0].association['public_ip'] }} ansible_user=ec2-user ansible_ssh_private_key_file=/root/.ssh/id_rsa ansible_connection=ssh
                    [Kube_Worker_node]
-                   {{ x2.instances[0].network_interfaces[0].association['public_ip'] }} ansible_user=ec2-user ansible_ssh_private_key_file=/root/.ssh/id_rsa.pub ansible_connection=ssh
-                   {{ x3.instances[0].network_interfaces[0].association['public_ip'] }} ansible_user=ec2-user ansible_ssh_private_key_file=/root/.ssh/id_rsa.pub ansible_connection=ssh
+                   {{ x2.instances[0].network_interfaces[0].association['public_ip'] }} ansible_user=ec2-user ansible_ssh_private_key_file=/root/.ssh/id_rsa ansible_connection=ssh
+                   {{ x3.instances[0].network_interfaces[0].association['public_ip'] }} ansible_user=ec2-user ansible_ssh_private_key_file=/root/.ssh/id_rsa ansible_connection=ssh
   
 
    - meta: refresh_inventory
