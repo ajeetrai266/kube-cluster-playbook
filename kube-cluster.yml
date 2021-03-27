@@ -9,7 +9,7 @@
      ec2_key:
            aws_access_key: "{{ access_key }}"
            aws_secret_key: "{{ secret_key }}"
-           key_material: "{{ lookup('file', '/root/.ssh/id_rsa') }}"
+           key_material: "{{ lookup('file', '/root/.ssh/id_rsa.pub') }}"
            state: present
            name: "key-1"
 
