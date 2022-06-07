@@ -3,7 +3,7 @@ this Playbook ( kube-cluster.yml) is used to SetUp Kubernetes Cluster in EC2 Ins
 
 `Requirements`:
 - Access Key : **********
-- Secrete Key : ***********\
+- Secret Key : ***********\
 put both Key of your AWS account in the files name `(aws_key.yml)`, and Include this file name inside the Playbook
 
 This Playbook first Create Secret Key for EC2 Instance to access the Instance, `So first Run this command on your localhost system`
