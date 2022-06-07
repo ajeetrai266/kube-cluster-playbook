@@ -11,7 +11,7 @@
            aws_secret_key: "{{ secret_key }}"
            key_material: "{{ lookup('file', '/root/.ssh/id_rsa.pub') }}"
            state: present
-           name: "key-1"
+           name: "ansible-ssh-key"
 
 
    - name: "Provisioning 1 Instance for Master Node"
